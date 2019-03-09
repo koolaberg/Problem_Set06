@@ -1,0 +1,128 @@
+---
+title: 'Problem Set 06'
+author: "Jenna Kalleberg: Group 5"
+date: 'Last updated: `r Sys.Date()`'
+output:
+  html_document:
+    smart: no
+    theme: flatly
+    toc: true
+    toc_float: true
+---
+
+## Working with lists
+
+Lists are one of the most flexible data structures in R. They can hold any combination of other types of R objects (including other lists). R functions like `lm()` return lists.^[R functions can only return a single object (unlike languages like python and MATLAB, which can return multiple objects). So everything that needs to be returned from a function is placed into a list, which gets returned.]
+
+Lists are indexed a little differently from vectors and matrices. List indices are indexed using double brackets: `[[1]]` extracts (or assigns) the first element. Run the following code:
+
+```{r}
+mylist <- list()
+mylist[[3]] <- 24
+mylist
+```
+
+We first create an empty list, using the `list()` function. The second line assigns 24 to the 3rd element. When we print the list (last line), you can see that the 1st and 2nd elements are created and left as `NULL`. Managing lists can be harrowing:
+
+```{r}
+mylist[[1]] <- "hello world"
+mylist[[2]] <- list(x = 12, y = "y", z = seq(1, 5, by = 0.2))
+mylist
+```
+
+Now the 1st element has a string, the 2nd has a list (which itself contains a numeric, a string, and a vector). How would you extract the 3rd element from the `z` vector?
+
+```{r}
+mylist[[2]]$z[3]
+```
+
+We will use lists in a much less convoluted way, which is what you should do until you get comfortable. For now, we will use a list to hold 4 plots, which we will arrange in a grid to make a usable figure.
+
+### Activity
+
+The file `mammals.xlsx` contains data for about 50 different traits. *All* 5416 species of mammals are included in the file, though none has data for all traits. We want to make some quick plots of four different traits plotted against body mass.
+
+Rather than creating separate plots, we want to make them inside a loop, where we iterate through the columns of interest. This will make it easy to modify the format of the plots all at once, reducing the amount of code to keep up with. For example, change all the points to be transparent in one line rather than in four places.
+
+1. Load the data from `mammals.xlsx`.
+2. Create a column that holds the log10 transformation of `adult_body_mass_g` and one for the log10 of `basal_met_rate_m_l_o2hr`.
+3. Create a vector of strings that we will use to iterate through the columns for analysis (we used `cols_analyze`). It should contain the following strings:
+    - "ageat_eye_opening_d"
+    - "log_BMR" (or whatever you called the log10 of `basal_met_rate_m_l_o2hr`)
+    - "gestation_len_d"
+    - "litter_size"
+4. Create a vector of strings to use for the y axis labels. Make sure that the order matches the order in your vector #3.
+5. Create an empty list to hold plots: `pp <- list()` for example.
+
+This is all we need for the setup. At this point, you have the data, two vectors (one of columns names and one of y axis labels), and an empty list.
+
+```{r warning=FALSE}
+library(readxl)
+data <- read_excel("mammals.xlsx", na = "NA")
+str(data)
+
+data4 <- mutate(data, log_mass = log10(adult_body_mass_g), log_BMR = log10(basal_met_rate_m_l_o2hr))
+
+str(data4)
+
+cols_analyze <- c("ageat_eye_opening_d", "log_BMR", "gestation_len_d", "litter_size")
+y_labels <- c("Ageat Eye Opening (d)", "log BMR", "Gestation Lenght (d)", "Litter Size")
+pp <- list()
+```
+
+No we can work on a loop to iterate through the columns, making a plot for each column. Here is the pseudocode:
+
+1. Create the framework for a `for` loop.
+    - We want to iterate from 1 to `length(cols_analyze)`
+2. Extract the *i*th element of the columns to analyze vector. Assign to an object.
+3. Extract the *i*th element of the y axis label.
+4. Make a bivariate plot of the column vs. log Body Mass (assign to an object). This will look a little different from ggplots you have made before, particularly the aesthetics. Because you are supplying raw strings, you need to use `aes_string`. It will look something like (`col` is the variable that holds the string with the column name):
+    - `aes_string("log_Mass", col)`
+5. Assign the plot to the *i*th element of your list.
+
+```{r warning=FALSE, fig.width= 6, fig.height= 4}
+for (i in 1:length(cols_analyze)) {
+  val <- cols_analyze[i] #this is only one value, so we don't need to index it when including it in the grpah
+  #pp is an open list, so each "plot" can be saved within it
+  pp[[i]] <- ggplot(data4, aes_string(x ="log_mass", val)) +
+    geom_point(aes(color = factor(order)), size = 0.5, alpha = 0.5) + 
+    labs(x = "Log Mass", y = y_labels[i]) +
+    stat_smooth(method = "lm") + #adding a linear model to the data
+    theme(axis.text = element_text(size = 8), axis.title = element_text(size = 10), legend.position = "none", legend.title = element_blank())}
+
+pp 
+
+
+```
+
+At the end of the loop you will have a list that contains 4 plots. Try printing a plot by running `pp[[1]]` at the command line. If you get warnings saying something like `Removed 4948 rows containing missing values (geom_point).`, that is just ggplot saying that there are `NA`s in the data.
+
+Now you can make a 2x2 grid of plots. The cowplot function `plot_grid()` can take a list of plots as an argument: `plotlist = ...`. Pass your list of plots, and specify 2 columns and 2 rows (check the help for `plot_grid()`).
+```{r warning=FALSE, fig.width= 10, fig.height= 6}
+#found this code online, I wanted to get a better understanding of how the order of the animals impacted these relationships so I needed to add one key for all four graphs
+#install.packages("ggpubr")
+library(ggpubr)
+ggarrange(plotlist = pp, labels = c("A", "B", "C", "D"), nrow = 2, ncol = 2, common.legend = TRUE, legend = "bottom")
+
+#this only works because each plot in the list pp is on the same scale (common.legend = TRUE)
+```
+
+
+```{r warning=FALSE, fig.width= 6, fig.height= 4}
+plot_grid(plotlist = pp, labels = c("A", "B", "C", "D"), nrow = 2, ncol = 2)
+```
+
+Now you can fine tune the plots:
+
+- Add labels for x and y. The y label is the string you extracted from your vector of y axis labels.
+- Make the points smaller (`size = 0.5`) and transparent
+- Change the font size on the axis labels by adding the following code to your ggplot:
+
+```
++ theme(axis.text = element_text(size = 10),
+        axis.title = element_text(size = 10))
+```
+
+- Pass the argument `labels = c("a", "b", "c", "d")` to `plot_grid()` to add labels for each plot.
+
+As you can see rather than sequentially editing 4 sets of code, trying to make sure they all stay in sync, we can just edit one plotting statement and change the data in each iteration.
